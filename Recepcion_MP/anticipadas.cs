@@ -61,8 +61,8 @@ namespace Recepcion_MP
             adapter1 = new SqlDataAdapter("select A.numero_oc, A.fecha_recepcion, B.cantidad_oc, B.precio_oc,/*B.surtido_oc,*/ " +
                 "(select ISNULL(sum(hrp_clase1), 0) from tb_hist_recepcion C " +
                 "where C.hrp_numoc = A.numero_oc AND hrp_estatus <> 'C' AND C.prod_clave = B.prod_clave AND C.hrp_tipo_recepcion <> 'C') AS surtido_oc " +
-                "FROM tb_mstr_ordencompra A " + 
-                "join tb_det_ordenescompra B on A.numero_oc = B.numero_oc " + 
+                "FROM tb_mstr_ordencompra A " +
+                "join tb_det_ordenescompra B on A.numero_oc = B.numero_oc " +
                 "where A.anticipada = '1' " +
                 "and A.status_oc = 'A' AND A.factura_oc = 'MATERIAP' AND (select ISNULL(sum(hrp_clase1), 0) from tb_hist_recepcion C " +
                 "where C.hrp_numoc = A.numero_oc AND hrp_estatus <> 'C' AND C.prod_clave = B.prod_clave AND C.hrp_tipo_recepcion <> 'C') < B.cantidad_oc " +
@@ -145,7 +145,7 @@ namespace Recepcion_MP
             ////    }
             ////}
 
-            
+
             //comentado 27/12/2022
             //if (dtgGrado1.Rows.Count > 0)
             //{
@@ -184,20 +184,20 @@ namespace Recepcion_MP
             datos val = new datos();
             //if (lblCantidad.Text != "-")
             //{
-                val.ocg1 = lblOrdenCompra.Text;
+            val.ocg1 = lblOrdenCompra.Text;
             //}
             //if (lblCantidad2.Text != "-")
             //{
-                val.ocg2 = lblOrdenCompra2.Text;
+            val.ocg2 = lblOrdenCompra2.Text;
             //}
-                val.estado = "1";
-                val.costo1 = lblCosto.Text;
-                val.costo2 = lblCosto2.Text;
+            val.estado = "1";
+            val.costo1 = lblCosto.Text;
+            val.costo2 = lblCosto2.Text;
             SharedDatos.DatosCell = val;
             this.DialogResult = System.Windows.Forms.DialogResult.OK;
             this.Close();
 
-            
+
         }
 
         public class datos

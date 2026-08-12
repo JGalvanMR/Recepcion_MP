@@ -640,14 +640,14 @@ namespace Recepcion_MP
             catch (SqlException ex)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "sisgab", ex.ToString());
+                Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex.ToString());
                 MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             catch (Exception ex1)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "sisgab", ex1.ToString());
+                Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex1.ToString());
                 MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }    
@@ -1879,7 +1879,7 @@ namespace Recepcion_MP
                     catch (SqlException ex)
                     {
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "sisgab", ex.ToString());
+                        Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex.ToString());
                         Utilerias.Class1.registro_errores(DateTime.Now, Utilerias.Class1.Usu_login, Environment.MachineName, "2.1", ex.ToString().Trim(), "SIPGAB");
                         MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
@@ -1887,7 +1887,7 @@ namespace Recepcion_MP
                     catch (Exception ex1)
                     {
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "sisgab", ex1.ToString());
+                        Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex1.ToString());
                         MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
@@ -3416,7 +3416,7 @@ namespace Recepcion_MP
                 catch (SqlException ex)
                 {
                     thisConnection.Close();
-                    Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "sisgab", ex.ToString());
+                    Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex.ToString());
                     Utilerias.Class1.registro_errores(DateTime.Now, Utilerias.Class1.Usu_login, Environment.MachineName, "2.1", ex.ToString().Trim(), "MPSQL");
                     MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
@@ -3424,7 +3424,7 @@ namespace Recepcion_MP
                 catch (Exception ex1)
                 {
                     thisConnection.Close();
-                    Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "sisgab", ex1.ToString());
+                    Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex1.ToString());
                     MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }                 
