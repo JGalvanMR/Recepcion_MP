@@ -4474,16 +4474,9 @@ namespace Recepcion_MP
                 if (File.Exists(Archivo))
                     email.Attachments.Add(new Attachment(Archivo));
 
-            SmtpClient smtp = new SmtpClient();
-            smtp.Host = "mail1.mrlucky.com.mx";
-            smtp.Port = 587;
-            smtp.EnableSsl = true;
-            smtp.UseDefaultCredentials = false;
-            smtp.Credentials = new NetworkCredential("mprima", "F7udjVm1928M$123");
-
             try
             {
-                smtp.Send(email);
+                CorreoGraph.Enviar(email);
                 email.Dispose();
                 //MessageBox.Show("correo enviado", "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }

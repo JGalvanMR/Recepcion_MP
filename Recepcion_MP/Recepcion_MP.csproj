@@ -76,6 +76,8 @@
     <Compile Include="anticipadas.Designer.cs">
       <DependentUpon>anticipadas.cs</DependentUpon>
     </Compile>
+    <Compile Include="CorreoGraph.cs" />
+    <Compile Include="CorreoGraphSecreto.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
