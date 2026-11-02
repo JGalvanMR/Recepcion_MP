@@ -4684,14 +4684,17 @@ namespace Recepcion_MP
         {
             //Verificar ordenes de compra anticipadas 24/05/2021
             string conteo = "";
+            string totalAnticipadas = "";
             thisConnection.Open();
             cmnd1 = thisConnection.CreateCommand();
-            cmnd1.CommandText = "SELECT count(A.numero_oc) AS cantidad FROM tb_mstr_ordencompra A JOIN tb_det_ordenescompra B ON A.numero_oc = B.numero_oc " +
-                "WHERE A.cveprov_oc = '" + txtprov_clave.Text + "' AND B.prod_clave  = '" + txtprod_clave.Text + "' AND A.status_oc = 'A' AND A.factura_oc = 'MATERIAP' AND A.fecha_recepcion <= '" + DateTime.Now.ToShortDateString() + "' AND A.anticipada = '1' " +
-                "AND B.surtido_oc <> B.cantidad_oc";
+            // cantidad = OC anticipadas con saldo pendiente; total = todas, incluidas las ya surtidas
+            cmnd1.CommandText = "SELECT ISNULL(SUM(CASE WHEN B.surtido_oc <> B.cantidad_oc THEN 1 ELSE 0 END), 0) AS cantidad, count(A.numero_oc) AS total " +
+                "FROM tb_mstr_ordencompra A JOIN tb_det_ordenescompra B ON A.numero_oc = B.numero_oc " +
+                "WHERE A.cveprov_oc = '" + txtprov_clave.Text + "' AND B.prod_clave  = '" + txtprod_clave.Text + "' AND A.status_oc = 'A' AND A.factura_oc = 'MATERIAP' AND A.fecha_recepcion <= '" + DateTime.Now.ToShortDateString() + "' AND A.anticipada = '1'";
             reader1 = cmnd1.ExecuteReader();
             reader1.Read();
             conteo = reader1["cantidad"].ToString().Trim();
+            totalAnticipadas = reader1["total"].ToString().Trim();
             reader1.Close();
             reader1.Dispose();
             cmnd1.Dispose();
@@ -4721,6 +4724,12 @@ namespace Recepcion_MP
                     lblCostoOCG2.Text = (anticipadas.SharedDatos.DatosCell.costo2 == "-") ? "0" : anticipadas.SharedDatos.DatosCell.costo2;
                     lblEstado.Text = anticipadas.SharedDatos.DatosCell.estado;
                 }
+            }
+            else if (Convert.ToInt32(totalAnticipadas) > 0)
+            {
+                MessageBox.Show("El proveedor " + txtprov_clave.Text.Trim() + " tiene órdenes de compra anticipadas para el producto " + txtprod_clave.Text.Trim() +
+                    ", pero todas ya están surtidas al 100%.\n\nSolicite a Compras una nueva orden anticipada o que amplíe la cantidad de una existente, " +
+                    "y vuelva a seleccionar el ticket.", "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             //Verificar ordenes de compra anticipadas 24/05/2021
         }
