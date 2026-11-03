@@ -4687,10 +4687,17 @@ namespace Recepcion_MP
             string totalAnticipadas = "";
             thisConnection.Open();
             cmnd1 = thisConnection.CreateCommand();
-            // cantidad = OC anticipadas con saldo pendiente; total = todas, incluidas las ya surtidas
-            cmnd1.CommandText = "SELECT ISNULL(SUM(CASE WHEN B.surtido_oc <> B.cantidad_oc THEN 1 ELSE 0 END), 0) AS cantidad, count(A.numero_oc) AS total " +
+            // cantidad = OC anticipadas con saldo pendiente; total = todas, incluidas las ya surtidas.
+            // Lo surtido se calcula igual que en la ventana "anticipadas" (recepciones reales no canceladas en
+            // tb_hist_recepcion, por grado), no con la columna tb_det_ordenescompra.surtido_oc: esa columna solo
+            // se incrementa y no se corrige al cancelar o rehacer una recepcion, por lo que puede quedar inflada.
+            cmnd1.CommandText = "SELECT ISNULL(SUM(CASE WHEN X.surtido_real < X.cantidad_oc THEN 1 ELSE 0 END), 0) AS cantidad, count(*) AS total FROM ( " +
+                "SELECT B.cantidad_oc, CASE WHEN A.liquidacion = 'GRADO2' " +
+                "THEN (SELECT ISNULL(sum(C.hrp_clase2), 0) FROM tb_hist_recepcion C WHERE C.hrp_numoc_g2 = A.numero_oc AND C.hrp_estatus <> 'C' AND C.prod_clave = B.prod_clave AND C.hrp_tipo_recepcion <> 'C') " +
+                "ELSE (SELECT ISNULL(sum(C.hrp_clase1), 0) FROM tb_hist_recepcion C WHERE C.hrp_numoc = A.numero_oc AND C.hrp_estatus <> 'C' AND C.prod_clave = B.prod_clave AND C.hrp_tipo_recepcion <> 'C') END AS surtido_real " +
                 "FROM tb_mstr_ordencompra A JOIN tb_det_ordenescompra B ON A.numero_oc = B.numero_oc " +
-                "WHERE A.cveprov_oc = '" + txtprov_clave.Text + "' AND B.prod_clave  = '" + txtprod_clave.Text + "' AND A.status_oc = 'A' AND A.factura_oc = 'MATERIAP' AND A.fecha_recepcion <= '" + DateTime.Now.ToShortDateString() + "' AND A.anticipada = '1'";
+                "WHERE A.cveprov_oc = '" + txtprov_clave.Text + "' AND B.prod_clave  = '" + txtprod_clave.Text + "' AND A.status_oc = 'A' AND A.factura_oc = 'MATERIAP' AND A.fecha_recepcion <= '" + DateTime.Now.ToShortDateString() + "' AND A.anticipada = '1' " +
+                "AND A.liquidacion IN ('GRADO1', 'GRADO2') AND LEN(B.prod_clave) > 4 ) X";
             reader1 = cmnd1.ExecuteReader();
             reader1.Read();
             conteo = reader1["cantidad"].ToString().Trim();
