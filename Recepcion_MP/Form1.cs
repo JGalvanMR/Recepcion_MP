@@ -208,14 +208,14 @@ namespace Recepcion_MP
             catch (SqlException ex)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex.ToString());
                 MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             catch (Exception ex1)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                 MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }              
@@ -640,14 +640,14 @@ namespace Recepcion_MP
             catch (SqlException ex)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex.ToString());
+                AvisoError("sistemas@mrlucky.com.mx", ex.ToString());
                 MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             catch (Exception ex1)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex1.ToString());
+                AvisoError("sistemas@mrlucky.com.mx", ex1.ToString());
                 MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }    
@@ -1032,6 +1032,32 @@ namespace Recepcion_MP
             thisConnection.Close();
         }
         
+        // Comando ligado a la transacción del guardado y con tiempo de espera de 120 s (antes 30 s por defecto)
+        private static SqlCommand NuevoCmd(SqlConnection conexion, SqlTransaction trx)
+        {
+            SqlCommand c = conexion.CreateCommand();
+            c.Transaction = trx;
+            c.CommandTimeout = 120;
+            return c;
+        }
+
+        // Aviso de error por Microsoft Graph. Nunca lanza excepción (se usa dentro de catch).
+        private static void AvisoError(string destino, string detalle)
+        {
+            try
+            {
+                MailMessage m = new MailMessage();
+                m.To.Add(new MailAddress(destino));
+                m.From = new MailAddress("sistemas@mrlucky.com.mx");
+                m.Subject = "Error en Recepcion_MP (" + Environment.MachineName + ")";
+                m.Body = detalle;
+                m.IsBodyHtml = false;
+                CorreoGraph.Enviar(m);
+                m.Dispose();
+            }
+            catch { }
+        }
+
         private void btnGuardar_Click(object sender, EventArgs e)
         {            
             #region opción 1 guardar
@@ -1379,6 +1405,7 @@ namespace Recepcion_MP
                     txtpzsxcana.Text = Convert.ToString(Math.Truncate(num_pzs));
 
                     #region SQL
+                    SqlTransaction trx = null;
                     try
                     {
                         if (CBAjuste.Checked == true)
@@ -1390,9 +1417,11 @@ namespace Recepcion_MP
                             contrato = cbcontrato.SelectedItem.ToString().Trim();
 
                         thisConnection.Open();
+                        // Transacción: o se guarda todo el recibo o no se guarda nada (antes un timeout dejaba recibos a medias)
+                        trx = thisConnection.BeginTransaction();
 
                         #region guarda en la tb_mstr_recepcion_mp
-                        cmnd1 = thisConnection.CreateCommand();
+                        cmnd1 = NuevoCmd(thisConnection, trx);
                         /*cmnd1.CommandText = "INSERT INTO tb_mstr_recepcion_mp (rmp_recibo, rmp_fecha, rmp_ticket, rmp_flete, prov_clave, rch_clave, tbl_clave, " +
                                           "mp_codigo, prod_clave, lin_clave, vari_clave, rmp_peso_bruto, rmp_tara, env_clave, rmp_num_envase, rmp_hoja, rmp_pata, " +
                                           "rmp_muestra, rmp_clase1, rmp_clase2, rmp_defectos, rmp_observaciones, rmp_pesador, rmp_evaluador, rmp_precio_grado1, " +
@@ -1434,7 +1463,7 @@ namespace Recepcion_MP
                         #region guarda en tb_mstr_danos
                         for (int i = 0; i < DGV1.Rows.Count; i++)
                         {
-                            cmnd1 = thisConnection.CreateCommand();
+                            cmnd1 = NuevoCmd(thisConnection, trx);
                             cmnd1.CommandText = "insert into tb_mstr_danos (rmp_recibo, lin_clave, dno_clave, dnm_peso, dnm_tipo, dnm_cantidad) values ('" + txtrecibo.Text + "', '" + linea + "', '" + Convert.ToString(DGV1.Rows[i].Cells[3].Value) + "', " + Convert.ToDecimal(DGV1.Rows[i].Cells[1].Value) + ", 'MP', 0)";
                             reader1 = cmnd1.ExecuteReader();
                             reader1.Dispose();
@@ -1444,7 +1473,7 @@ namespace Recepcion_MP
                         #region guarda tb_mstr_insectos
                         for (int i = 0; i < DGV2.Rows.Count; i++)
                         {
-                            cmnd1 = thisConnection.CreateCommand();
+                            cmnd1 = NuevoCmd(thisConnection, trx);
                             cmnd1.CommandText = "insert into tb_mstr_insectos (rmp_recibo, ins_clave, cantidad) values ('" + txtrecibo.Text + "', '" + Convert.ToString(DGV2.Rows[i].Cells[2].Value) + "', '" + Convert.ToString(DGV2.Rows[i].Cells[1].Value) + "')";
                             reader1 = cmnd1.ExecuteReader();
                             reader1.Dispose();
@@ -1452,7 +1481,7 @@ namespace Recepcion_MP
                         #endregion
 
                         #region verifica que no haya otro recibo en el tb_hist_recibo
-                        cmnd1 = thisConnection.CreateCommand();
+                        cmnd1 = NuevoCmd(thisConnection, trx);
                         cmnd1.CommandText = "select * from tb_hist_recepcion where hrp_tipo_recepcion = 'MP' and hrp_recibo = " + Convert.ToInt32(txtrecibo.Text);
                         reader1 = cmnd1.ExecuteReader();
                         while (reader1.Read())
@@ -1465,7 +1494,7 @@ namespace Recepcion_MP
 
                         #region graba en el tb_hist_recepcion
                         
-                            cmnd1 = thisConnection.CreateCommand();
+                            cmnd1 = NuevoCmd(thisConnection, trx);
                             cmnd1.CommandText = "insert into tb_hist_recepcion (hrp_recibo, hrp_fecha, hrp_ticket, hrp_tipo_recepcion, lin_clave, prod_clave, " +
                                                 "hrp_peso_util, hrp_peso_neto, hrp_num_unidades, hrp_reman_unidades, hrp_clase1, hrp_clase2, hrp_estatus, hrp_reman_kg, " +
                                                 "hrp_proceso, hrp_peso_linea, hrp_un_linea, hrp_situacion, hrp_liquidado, hrp_afect_costo, hrp_numliq, liquidado, " +
@@ -1477,6 +1506,261 @@ namespace Recepcion_MP
                             reader1 = cmnd1.ExecuteReader();
                             reader1.Dispose();
                         #endregion
+
+
+                        #region afecta inventario
+                        //va y hace una consulta para saber si hay un registro con la fecha actual
+                        cmnd1 = NuevoCmd(thisConnection, trx);
+                        cmnd1.CommandText = "select invmp_entradas_kg, invmp_entradas_un from tb_mstr_inventario_mp where invmp_fecha = '" + System.DateTime.Now.ToShortDateString() + "' and lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
+                        reader1 = cmnd1.ExecuteReader();
+                        while (reader1.Read())
+                        {
+                            invmp_entradas_kg = reader1.GetSqlDecimal(0).Value;
+                            invmp_entradas_un = reader1.GetSqlDecimal(1).Value;
+
+                            invmp_entradas_kg = invmp_entradas_kg + Convert.ToDecimal(txttotalgrado1.Text);
+                            invmp_entradas_un = invmp_entradas_un + Convert.ToDecimal(txtrmpnumenvase.Text);
+
+                            cmnd11 = NuevoCmd(thisConnection, trx);
+                            cmnd11.CommandText = "update tb_mstr_inventario_mp set invmp_entradas_kg = " + invmp_entradas_kg + ", invmp_entradas_un = " + invmp_entradas_un + " where lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
+                            reader11 = cmnd11.ExecuteReader();
+                            reader11.Dispose();
+                        }
+                        if (reader1.HasRows == false)
+                        {
+                            cmnd11 = NuevoCmd(thisConnection, trx);
+                            cmnd11.CommandText = "select top 1 invmp_inicial_kg, invmp_inicial_un, ISNULL(invmp_entradas_kg,0) AS invmp_entradas_kg, ISNULL(invmp_entradas_un,0) AS invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un from tb_mstr_inventario_mp where lin_clave ='" + linea + "' and prod_clave ='" + txtprod_clave.Text + "' order BY invmp_fecha desc";
+                            reader11 = cmnd11.ExecuteReader();
+                            while (reader11.Read())
+                            {
+                                invmp_inicial_kg = reader11.GetSqlDecimal(0).Value;
+                                invmp_inicial_un = reader11.GetSqlDecimal(1).Value;
+                                invmp_entradas_kg = reader11.GetSqlDecimal(2).Value;
+                                invmp_entradas_un = reader11.GetSqlDecimal(3).Value;
+                                invmp_salidas_kg = reader11.GetSqlDecimal(4).Value;
+                                invmp_salidas_un = reader11.GetSqlDecimal(5).Value;
+
+                                var_dec_inv_inicial_kg = invmp_inicial_kg + invmp_entradas_kg - invmp_salidas_kg;
+                                var_dec_inv_inicial_un = invmp_inicial_un + invmp_entradas_un - invmp_salidas_un;
+
+                                //inserto un nuevo registro
+                                cmnd21 = NuevoCmd(thisConnection, trx);
+                                cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_un, invmp_inicial_kg, invmp_entradas_un, invmp_entradas_kg, invmp_salidas_un, invmp_salidas_kg) " +
+                                                   "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea + "', '" + txtprod_clave.Text + "', " + var_dec_inv_inicial_un + ", " + var_dec_inv_inicial_kg + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " + Convert.ToDecimal(txttotalgrado1.Text) + ", 0, 0)";
+                                reader21 = cmnd21.ExecuteReader();
+                                reader21.Dispose();
+                            }
+                            if (reader11.HasRows == false)
+                            {
+                                cmnd21 = NuevoCmd(thisConnection, trx);
+                                cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_kg, invmp_inicial_un, invmp_entradas_kg, invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un) " +
+                                                    "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea.Trim() + "', '" + txtprod_clave.Text + "', 0, 0, " + Convert.ToDecimal(txttotalgrado1.Text) + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", 0, 0)";
+                                reader21 = cmnd21.ExecuteReader();
+                                reader21.Dispose();
+                            }
+                            reader11.Dispose();
+                        }
+                        reader1.Dispose();
+                        #endregion
+
+                        #region envases
+                        cmnd1 = NuevoCmd(thisConnection, trx);
+                        cmnd1.CommandText = "select prod_muestra from tb_cat_producto where prod_tipo = 'MP' and prod_clave = '" + txtprod_clave.Text + "'";
+                        reader1 = cmnd1.ExecuteReader();
+                        if (reader1.HasRows)
+                        {
+                            while (reader1.Read())
+                            {
+                                prod_muestra = Convert.ToDecimal(reader1.GetValue(0).ToString());
+                            }
+                        }
+                        else
+                            prod_muestra = 1;
+
+                        reader1.Dispose();
+
+                        cmnd1 = NuevoCmd(thisConnection, trx);
+                        cmnd1.CommandText = "select max(folio) as m_SIG from tb_entradas_envases";
+                        reader1 = cmnd1.ExecuteReader();
+                        while (reader1.Read())
+                        {
+                            folio_anterior = Convert.ToDecimal(reader1.GetValue(0).ToString());
+                        }
+                        reader1.Dispose();
+
+                        cmnd1 = NuevoCmd(thisConnection, trx);
+                        cmnd1.CommandText = "insert into tb_entradas_envases (fecha, prov_clave, prov_nombre, rch_clave, rch_nombre, tbl_clave, tbl_nombre, " +
+                                          "nom_chofer, nom_operador, rmp_folio, ent_status, ALTA_REAL) values ('" + lbfecha.Text + "', '" + txtprov_clave.Text + "', '" + txtprov.Text + "', " +
+                                          "'" + txtrch_clave.Text + "', '" + txtrancho.Text + "', '" + txttbl_clave.Text + "', '" + txttabla.Text + "', ' ', '" + txtevaluador.Text + "', " +
+                                          "'" + txtrecibo.Text + "', 'T', GETDATE())";
+                        reader1 = cmnd1.ExecuteReader();
+
+                        reader1.Dispose();
+
+                        cmnd1 = NuevoCmd(thisConnection, trx);
+                        cmnd1.CommandText = "select max(folio) as m_SIG from tb_entradas_envases";
+                        reader1 = cmnd1.ExecuteReader();
+                        while (reader1.Read())
+                        {
+                            m_SIG = reader1.GetSqlDecimal(0).Value;
+                        }
+                        reader1.Dispose();
+
+                        if (m_SIG <= folio_anterior)
+                            MessageBox.Show("ERROR EN LOS CONSECUTIVOS DE TB_ENTRADAS_ENVASES");
+                        else
+                        {
+                            cmnd1 = NuevoCmd(thisConnection, trx);
+                            cmnd1.CommandText = "insert into tb_detentradas_envases (folio, env_clave, env_nombre, cantidad, prod_clave, prod_nombre) " +
+                                              "values (" + m_SIG + ", '" + env_clave + "', '" + txtenv.Text + "', '" + Convert.ToDecimal(txtrmpnumenvase.Text) + "', " +
+                                              "'" + txtprod_clave.Text + "', '" + txtprod.Text + "')";
+                            reader1 = cmnd1.ExecuteReader();
+                            reader1.Dispose();
+
+                            existe = "N";
+
+                            cmnd1 = NuevoCmd(thisConnection, trx);
+                            cmnd1.CommandText = "select * from tb_mstr_envases where prov_clave = '" + txtprov_clave.Text + "' and rch_clave = '" + txtrch_clave.Text + "' and tbl_clave = '" + txttbl_clave.Text + "' and env_clave = '" + env_clave + "'";
+                            reader1 = cmnd1.ExecuteReader();
+                            if (reader1.HasRows)
+                                existe = "S";
+
+                            reader1.Dispose();
+
+                            if (existe.Trim() == "S")
+                            {
+                                cmnd1 = NuevoCmd(thisConnection, trx);
+                                cmnd1.CommandText = "update tb_mstr_envases set cant_entradas = cant_entradas + " + Convert.ToDecimal(txtrmpnumenvase.Text) + " where prov_clave = '" + txtprov_clave.Text + "' and rch_clave = '" + txtrch_clave.Text + "' and tbl_clave = '" + txttbl_clave.Text + "' and env_clave ='" + env_clave + "'";
+                                reader1 = cmnd1.ExecuteReader();
+                            }
+                            else
+                            {
+                                cmnd1 = NuevoCmd(thisConnection, trx);
+                                cmnd1.CommandText = "insert into tb_mstr_envases (prov_clave, rch_clave, tbl_clave, cant_entradas, env_clave, cant_salidas) " +
+                                                  "values ('" + txtprov_clave.Text + "', '" + txtrch_clave.Text + "', '" + txttbl_clave.Text + "', " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
+                                                  "'" + env_clave + "', 0)";
+                                reader1 = cmnd1.ExecuteReader();
+                            }
+                            reader1.Dispose();
+
+                            //VOY A AGREGAR LA EXISTENCIA DEL INVENTARIO POR ENVASE EN EL MAESTRO DE INV DE ENVASES
+                            cmnd1 = NuevoCmd(thisConnection, trx);
+                            cmnd1.CommandText = "update tb_mstr_inv_envases set env_inv_cant = env_inv_cant + " + Convert.ToDecimal(txtrmpnumenvase.Text) + " where env_clave = '" + env_clave + "'";
+                            reader1 = cmnd1.ExecuteReader();
+                            reader1.Dispose();
+                        }
+                        #endregion
+
+                        #region actualiza el estatus en tb_det_recepcion_bascula
+                        
+                        if (CBvariedad.SelectedIndex != -1)
+                        {
+                            cmnd1 = NuevoCmd(thisConnection, trx);
+                            cmnd1.CommandText = "update tb_det_recepcion_bascula set estatus = 'R', cantidad = " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
+                                                "flete = " + txtrecibo.Text + ", prov_clave = '" + txtprov_clave.Text + "', rch_clave ='" + txtrch_clave.Text + "', " +
+                                                "id_tabla ='" + txttbl_clave.Text + "', tabla = '" + txttabla.Text + "' where " +
+                                                "variedad = ' " + CBvariedad.SelectedText.ToString().Trim() + "' and id_ticket = " + ticket.SelectedItem.ToString() + " and " +
+                                                "num_prod = " + num_prod + " and flete = '" + txtflete.Text + "'";
+                            reader1 = cmnd1.ExecuteReader();
+                            ActuBascu = cmnd1.CommandText.ToString().Replace("'", "");
+                            reader1.Dispose();
+                        }
+                        else
+                        {
+                            cmnd1 = NuevoCmd(thisConnection, trx);
+                            cmnd1.CommandText = "update tb_det_recepcion_bascula set estatus = 'R', cantidad = " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
+                                                "flete = " + txtrecibo.Text + ", prov_clave = '" + txtprov_clave.Text + "', rch_clave ='" + txtrch_clave.Text + "', " +
+                                                "id_tabla ='" + txttbl_clave.Text + "', tabla = '" + txttabla.Text + "' where id_ticket = " + ticket.SelectedItem.ToString() + " " +
+                                                "and num_prod = " + num_prod + " and flete = '" + txtflete.Text + "'";
+                            reader1 = cmnd1.ExecuteReader();
+                            ActuBascu += System.Environment.NewLine + cmnd1.CommandText.ToString().Replace("'", "");
+                            reader1.Dispose();
+                        }
+                        #endregion
+
+                        #region verifica que se haya registrado en tb_hist_recepcion
+                        cmnd1 = NuevoCmd(thisConnection, trx);
+                        cmnd1.CommandText = "select * from tb_hist_recepcion where hrp_recibo = '" + txtrecibo.Text + "' and hrp_tipo_recepcion = 'MP'";
+                        reader1 = cmnd1.ExecuteReader();
+                        if (reader1.HasRows == false)
+                        {
+                            reader1.Dispose();
+                            #region graba en el tb_hist_recepcion
+                            cmnd1 = NuevoCmd(thisConnection, trx);
+                            cmnd1.CommandText = "insert into tb_hist_recepcion (hrp_recibo, hrp_fecha, hrp_ticket, hrp_tipo_recepcion, lin_clave, prod_clave, " +
+                                                "hrp_peso_util, hrp_peso_neto, hrp_num_unidades, hrp_reman_unidades, hrp_clase1, hrp_clase2, hrp_estatus, hrp_reman_kg, " +
+                                                "hrp_proceso, hrp_peso_linea, hrp_un_linea, hrp_situacion, hrp_liquidado, hrp_afect_costo, hrp_numliq, liquidado, " +
+                                                "hrp_cvepro, hrp_numoc, hrp_recref, hrp_surtido, hrp_estatus_sur) values (" + Convert.ToInt32(txtrecibo.Text) + ", " +
+                                                "'" + lbfecha.Text + "', '" + ticket.SelectedItem.ToString().Trim() + "', 'MP', '" + linea + "', '" + txtprod_clave.Text + "', " +
+                                                "" + Convert.ToDecimal(txtpesoutil.Text) + ", " + Convert.ToDecimal(txtpesoneto.Text) + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
+                                                "" + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " + Convert.ToDecimal(txttotalgrado1.Text) + ", " + Convert.ToDecimal(txttotalgrado2.Text) + ", " +
+                                                "'T', " + Convert.ToDecimal(txtpesoneto.Text) + ", 0, 0, 0, '" + ajuste + "', '', 'F', ' ', 'F', ' ', ' ', ' ', 0, ' ')";
+                            reader1 = cmnd1.ExecuteReader();
+                            reader1.Dispose();
+                            #endregion
+
+                            #region afecta inventario
+                            //va y hace una consulta para saber si hay un registro con la fecha actual
+                            cmnd1 = NuevoCmd(thisConnection, trx);
+                            cmnd1.CommandText = "select invmp_entradas_kg, invmp_entradas_un from tb_mstr_inventario_mp where invmp_fecha = '" + System.DateTime.Now.ToShortDateString() + "' and lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
+                            reader1 = cmnd1.ExecuteReader();
+                            while (reader1.Read())
+                            {
+                                invmp_entradas_kg = reader1.GetSqlDecimal(0).Value;
+                                invmp_entradas_un = reader1.GetSqlDecimal(1).Value;
+
+                                invmp_entradas_kg = invmp_entradas_kg + Convert.ToDecimal(txttotalgrado1.Text);
+                                invmp_entradas_un = invmp_entradas_un + Convert.ToDecimal(txtrmpnumenvase.Text);
+
+                                cmnd11 = NuevoCmd(thisConnection, trx);
+                                cmnd11.CommandText = "update tb_mstr_inventario_mp set invmp_entradas_kg = " + invmp_entradas_kg + ", invmp_entradas_un = " + invmp_entradas_un + " where lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
+                                reader11 = cmnd11.ExecuteReader();
+                                reader11.Dispose();
+                            }
+                            if (reader1.HasRows == false)
+                            {
+                                cmnd11 = NuevoCmd(thisConnection, trx);
+                                cmnd11.CommandText = "select top 1 invmp_inicial_kg, invmp_inicial_un, invmp_entradas_kg, invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un from tb_mstr_inventario_mp where lin_clave ='" + linea + "' and prod_clave ='" + txtprod_clave.Text + "' order BY invmp_fecha desc";
+                                reader11 = cmnd11.ExecuteReader();
+                                while (reader11.Read())
+                                {
+                                    invmp_inicial_kg = reader11.GetSqlDecimal(0).Value;
+                                    invmp_inicial_un = reader11.GetSqlDecimal(1).Value;
+                                    invmp_entradas_kg = reader11.GetSqlDecimal(2).Value;
+                                    invmp_entradas_un = reader11.GetSqlDecimal(3).Value;
+                                    invmp_salidas_kg = reader11.GetSqlDecimal(4).Value;
+                                    invmp_salidas_un = reader11.GetSqlDecimal(5).Value;
+
+                                    var_dec_inv_inicial_kg = invmp_inicial_kg + invmp_entradas_kg - invmp_salidas_kg;
+                                    var_dec_inv_inicial_un = invmp_inicial_un + invmp_entradas_un - invmp_salidas_un;
+
+                                    //inserto un nuevo registro
+                                    cmnd21 = NuevoCmd(thisConnection, trx);
+                                    cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_un, invmp_inicial_kg, invmp_entradas_un, invmp_entradas_kg, invmp_salidas_un, invmp_salidas_kg) " +
+                                                       "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea + "', '" + txtprod_clave.Text + "', " + var_dec_inv_inicial_un + ", " + var_dec_inv_inicial_kg + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " + Convert.ToDecimal(txttotalgrado1.Text) + ", 0, 0)";
+                                    reader21 = cmnd21.ExecuteReader();
+                                    reader21.Dispose();
+                                }
+                                if (reader11.HasRows == false)
+                                {
+                                    cmnd21 = NuevoCmd(thisConnection, trx);
+                                    cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_kg, invmp_inicial_un, invmp_entradas_kg, invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un) " +
+                                                        "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea.Trim() + "', '" + txtprod_clave.Text + "', 0, 0, " + Convert.ToDecimal(txttotalgrado1.Text) + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", 0, 0)";
+                                    reader21 = cmnd21.ExecuteReader();
+                                    reader21.Dispose();
+                                }
+                                reader11.Dispose();
+                            }
+                            reader1.Dispose();
+                            #endregion
+                        }
+                        reader1.Dispose();
+                        #endregion
+                        thisConnection.Close();
+
+                        // Fin de la transacción de SQL Server. Lo que sigue (réplica a Aguilares, correo, PDF) ya no retiene bloqueos.
+                        trx.Commit();
+                        trx = null;
 
                         #region Guardo el Recibo en la Tabla de Aguilares RCC 19 de Abril 2022
                             string Replica = "N";
@@ -1588,256 +1872,6 @@ namespace Recepcion_MP
                         
                         #endregion
 
-                        #region afecta inventario
-                        //va y hace una consulta para saber si hay un registro con la fecha actual
-                        cmnd1 = thisConnection.CreateCommand();
-                        cmnd1.CommandText = "select invmp_entradas_kg, invmp_entradas_un from tb_mstr_inventario_mp where invmp_fecha = '" + System.DateTime.Now.ToShortDateString() + "' and lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
-                        reader1 = cmnd1.ExecuteReader();
-                        while (reader1.Read())
-                        {
-                            invmp_entradas_kg = reader1.GetSqlDecimal(0).Value;
-                            invmp_entradas_un = reader1.GetSqlDecimal(1).Value;
-
-                            invmp_entradas_kg = invmp_entradas_kg + Convert.ToDecimal(txttotalgrado1.Text);
-                            invmp_entradas_un = invmp_entradas_un + Convert.ToDecimal(txtrmpnumenvase.Text);
-
-                            cmnd11 = thisConnection.CreateCommand();
-                            cmnd11.CommandText = "update tb_mstr_inventario_mp set invmp_entradas_kg = " + invmp_entradas_kg + ", invmp_entradas_un = " + invmp_entradas_un + " where lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
-                            reader11 = cmnd11.ExecuteReader();
-                            reader11.Dispose();
-                        }
-                        if (reader1.HasRows == false)
-                        {
-                            cmnd11 = thisConnection.CreateCommand();
-                            cmnd11.CommandText = "select top 1 invmp_inicial_kg, invmp_inicial_un, ISNULL(invmp_entradas_kg,0) AS invmp_entradas_kg, ISNULL(invmp_entradas_un,0) AS invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un from tb_mstr_inventario_mp where lin_clave ='" + linea + "' and prod_clave ='" + txtprod_clave.Text + "' order BY invmp_fecha desc";
-                            reader11 = cmnd11.ExecuteReader();
-                            while (reader11.Read())
-                            {
-                                invmp_inicial_kg = reader11.GetSqlDecimal(0).Value;
-                                invmp_inicial_un = reader11.GetSqlDecimal(1).Value;
-                                invmp_entradas_kg = reader11.GetSqlDecimal(2).Value;
-                                invmp_entradas_un = reader11.GetSqlDecimal(3).Value;
-                                invmp_salidas_kg = reader11.GetSqlDecimal(4).Value;
-                                invmp_salidas_un = reader11.GetSqlDecimal(5).Value;
-
-                                var_dec_inv_inicial_kg = invmp_inicial_kg + invmp_entradas_kg - invmp_salidas_kg;
-                                var_dec_inv_inicial_un = invmp_inicial_un + invmp_entradas_un - invmp_salidas_un;
-
-                                //inserto un nuevo registro
-                                cmnd21 = thisConnection.CreateCommand();
-                                cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_un, invmp_inicial_kg, invmp_entradas_un, invmp_entradas_kg, invmp_salidas_un, invmp_salidas_kg) " +
-                                                   "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea + "', '" + txtprod_clave.Text + "', " + var_dec_inv_inicial_un + ", " + var_dec_inv_inicial_kg + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " + Convert.ToDecimal(txttotalgrado1.Text) + ", 0, 0)";
-                                reader21 = cmnd21.ExecuteReader();
-                                reader21.Dispose();
-                            }
-                            if (reader11.HasRows == false)
-                            {
-                                cmnd21 = thisConnection.CreateCommand();
-                                cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_kg, invmp_inicial_un, invmp_entradas_kg, invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un) " +
-                                                    "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea.Trim() + "', '" + txtprod_clave.Text + "', 0, 0, " + Convert.ToDecimal(txttotalgrado1.Text) + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", 0, 0)";
-                                reader21 = cmnd21.ExecuteReader();
-                                reader21.Dispose();
-                            }
-                            reader11.Dispose();
-                        }
-                        reader1.Dispose();
-                        #endregion
-
-                        #region envases
-                        cmnd1 = thisConnection.CreateCommand();
-                        cmnd1.CommandText = "select prod_muestra from tb_cat_producto where prod_tipo = 'MP' and prod_clave = '" + txtprod_clave.Text + "'";
-                        reader1 = cmnd1.ExecuteReader();
-                        if (reader1.HasRows)
-                        {
-                            while (reader1.Read())
-                            {
-                                prod_muestra = Convert.ToDecimal(reader1.GetValue(0).ToString());
-                            }
-                        }
-                        else
-                            prod_muestra = 1;
-
-                        reader1.Dispose();
-
-                        cmnd1 = thisConnection.CreateCommand();
-                        cmnd1.CommandText = "select max(folio) as m_SIG from tb_entradas_envases";
-                        reader1 = cmnd1.ExecuteReader();
-                        while (reader1.Read())
-                        {
-                            folio_anterior = Convert.ToDecimal(reader1.GetValue(0).ToString());
-                        }
-                        reader1.Dispose();
-
-                        cmnd1 = thisConnection.CreateCommand();
-                        cmnd1.CommandText = "insert into tb_entradas_envases (fecha, prov_clave, prov_nombre, rch_clave, rch_nombre, tbl_clave, tbl_nombre, " +
-                                          "nom_chofer, nom_operador, rmp_folio, ent_status, ALTA_REAL) values ('" + lbfecha.Text + "', '" + txtprov_clave.Text + "', '" + txtprov.Text + "', " +
-                                          "'" + txtrch_clave.Text + "', '" + txtrancho.Text + "', '" + txttbl_clave.Text + "', '" + txttabla.Text + "', ' ', '" + txtevaluador.Text + "', " +
-                                          "'" + txtrecibo.Text + "', 'T', GETDATE())";
-                        reader1 = cmnd1.ExecuteReader();
-
-                        reader1.Dispose();
-
-                        cmnd1 = thisConnection.CreateCommand();
-                        cmnd1.CommandText = "select max(folio) as m_SIG from tb_entradas_envases";
-                        reader1 = cmnd1.ExecuteReader();
-                        while (reader1.Read())
-                        {
-                            m_SIG = reader1.GetSqlDecimal(0).Value;
-                        }
-                        reader1.Dispose();
-
-                        if (m_SIG <= folio_anterior)
-                            MessageBox.Show("ERROR EN LOS CONSECUTIVOS DE TB_ENTRADAS_ENVASES");
-                        else
-                        {
-                            cmnd1 = thisConnection.CreateCommand();
-                            cmnd1.CommandText = "insert into tb_detentradas_envases (folio, env_clave, env_nombre, cantidad, prod_clave, prod_nombre) " +
-                                              "values (" + m_SIG + ", '" + env_clave + "', '" + txtenv.Text + "', '" + Convert.ToDecimal(txtrmpnumenvase.Text) + "', " +
-                                              "'" + txtprod_clave.Text + "', '" + txtprod.Text + "')";
-                            reader1 = cmnd1.ExecuteReader();
-                            reader1.Dispose();
-
-                            existe = "N";
-
-                            cmnd1 = thisConnection.CreateCommand();
-                            cmnd1.CommandText = "select * from tb_mstr_envases where prov_clave = '" + txtprov_clave.Text + "' and rch_clave = '" + txtrch_clave.Text + "' and tbl_clave = '" + txttbl_clave.Text + "' and env_clave = '" + env_clave + "'";
-                            reader1 = cmnd1.ExecuteReader();
-                            if (reader1.HasRows)
-                                existe = "S";
-
-                            reader1.Dispose();
-
-                            if (existe.Trim() == "S")
-                            {
-                                cmnd1 = thisConnection.CreateCommand();
-                                cmnd1.CommandText = "update tb_mstr_envases set cant_entradas = cant_entradas + " + Convert.ToDecimal(txtrmpnumenvase.Text) + " where prov_clave = '" + txtprov_clave.Text + "' and rch_clave = '" + txtrch_clave.Text + "' and tbl_clave = '" + txttbl_clave.Text + "' and env_clave ='" + env_clave + "'";
-                                reader1 = cmnd1.ExecuteReader();
-                            }
-                            else
-                            {
-                                cmnd1 = thisConnection.CreateCommand();
-                                cmnd1.CommandText = "insert into tb_mstr_envases (prov_clave, rch_clave, tbl_clave, cant_entradas, env_clave, cant_salidas) " +
-                                                  "values ('" + txtprov_clave.Text + "', '" + txtrch_clave.Text + "', '" + txttbl_clave.Text + "', " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
-                                                  "'" + env_clave + "', 0)";
-                                reader1 = cmnd1.ExecuteReader();
-                            }
-                            reader1.Dispose();
-
-                            //VOY A AGREGAR LA EXISTENCIA DEL INVENTARIO POR ENVASE EN EL MAESTRO DE INV DE ENVASES
-                            cmnd1 = thisConnection.CreateCommand();
-                            cmnd1.CommandText = "update tb_mstr_inv_envases set env_inv_cant = env_inv_cant + " + Convert.ToDecimal(txtrmpnumenvase.Text) + " where env_clave = '" + env_clave + "'";
-                            reader1 = cmnd1.ExecuteReader();
-                            reader1.Dispose();
-                        }
-                        #endregion
-
-                        #region actualiza el estatus en tb_det_recepcion_bascula
-                        
-                        if (CBvariedad.SelectedIndex != -1)
-                        {
-                            cmnd1 = thisConnection.CreateCommand();
-                            cmnd1.CommandText = "update tb_det_recepcion_bascula set estatus = 'R', cantidad = " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
-                                                "flete = " + txtrecibo.Text + ", prov_clave = '" + txtprov_clave.Text + "', rch_clave ='" + txtrch_clave.Text + "', " +
-                                                "id_tabla ='" + txttbl_clave.Text + "', tabla = '" + txttabla.Text + "' where " +
-                                                "variedad = ' " + CBvariedad.SelectedText.ToString().Trim() + "' and id_ticket = " + ticket.SelectedItem.ToString() + " and " +
-                                                "num_prod = " + num_prod + " and flete = '" + txtflete.Text + "'";
-                            reader1 = cmnd1.ExecuteReader();
-                            ActuBascu = cmnd1.CommandText.ToString().Replace("'", "");
-                            reader1.Dispose();
-                        }
-                        else
-                        {
-                            cmnd1 = thisConnection.CreateCommand();
-                            cmnd1.CommandText = "update tb_det_recepcion_bascula set estatus = 'R', cantidad = " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
-                                                "flete = " + txtrecibo.Text + ", prov_clave = '" + txtprov_clave.Text + "', rch_clave ='" + txtrch_clave.Text + "', " +
-                                                "id_tabla ='" + txttbl_clave.Text + "', tabla = '" + txttabla.Text + "' where id_ticket = " + ticket.SelectedItem.ToString() + " " +
-                                                "and num_prod = " + num_prod + " and flete = '" + txtflete.Text + "'";
-                            reader1 = cmnd1.ExecuteReader();
-                            ActuBascu += System.Environment.NewLine + cmnd1.CommandText.ToString().Replace("'", "");
-                            reader1.Dispose();
-                        }
-                        #endregion
-
-                        #region verifica que se haya registrado en tb_hist_recepcion
-                        cmnd1 = thisConnection.CreateCommand();
-                        cmnd1.CommandText = "select * from tb_hist_recepcion where hrp_recibo = '" + txtrecibo.Text + "' and hrp_tipo_recepcion = 'MP'";
-                        reader1 = cmnd1.ExecuteReader();
-                        if (reader1.HasRows == false)
-                        {
-                            reader1.Dispose();
-                            #region graba en el tb_hist_recepcion
-                            cmnd1 = thisConnection.CreateCommand();
-                            cmnd1.CommandText = "insert into tb_hist_recepcion (hrp_recibo, hrp_fecha, hrp_ticket, hrp_tipo_recepcion, lin_clave, prod_clave, " +
-                                                "hrp_peso_util, hrp_peso_neto, hrp_num_unidades, hrp_reman_unidades, hrp_clase1, hrp_clase2, hrp_estatus, hrp_reman_kg, " +
-                                                "hrp_proceso, hrp_peso_linea, hrp_un_linea, hrp_situacion, hrp_liquidado, hrp_afect_costo, hrp_numliq, liquidado, " +
-                                                "hrp_cvepro, hrp_numoc, hrp_recref, hrp_surtido, hrp_estatus_sur) values (" + Convert.ToInt32(txtrecibo.Text) + ", " +
-                                                "'" + lbfecha.Text + "', '" + ticket.SelectedItem.ToString().Trim() + "', 'MP', '" + linea + "', '" + txtprod_clave.Text + "', " +
-                                                "" + Convert.ToDecimal(txtpesoutil.Text) + ", " + Convert.ToDecimal(txtpesoneto.Text) + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " +
-                                                "" + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " + Convert.ToDecimal(txttotalgrado1.Text) + ", " + Convert.ToDecimal(txttotalgrado2.Text) + ", " +
-                                                "'T', " + Convert.ToDecimal(txtpesoneto.Text) + ", 0, 0, 0, '" + ajuste + "', '', 'F', ' ', 'F', ' ', ' ', ' ', 0, ' ')";
-                            reader1 = cmnd1.ExecuteReader();
-                            reader1.Dispose();
-                            #endregion
-
-                            #region afecta inventario
-                            //va y hace una consulta para saber si hay un registro con la fecha actual
-                            cmnd1 = thisConnection.CreateCommand();
-                            cmnd1.CommandText = "select invmp_entradas_kg, invmp_entradas_un from tb_mstr_inventario_mp where invmp_fecha = '" + System.DateTime.Now.ToShortDateString() + "' and lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
-                            reader1 = cmnd1.ExecuteReader();
-                            while (reader1.Read())
-                            {
-                                invmp_entradas_kg = reader1.GetSqlDecimal(0).Value;
-                                invmp_entradas_un = reader1.GetSqlDecimal(1).Value;
-
-                                invmp_entradas_kg = invmp_entradas_kg + Convert.ToDecimal(txttotalgrado1.Text);
-                                invmp_entradas_un = invmp_entradas_un + Convert.ToDecimal(txtrmpnumenvase.Text);
-
-                                cmnd11 = thisConnection.CreateCommand();
-                                cmnd11.CommandText = "update tb_mstr_inventario_mp set invmp_entradas_kg = " + invmp_entradas_kg + ", invmp_entradas_un = " + invmp_entradas_un + " where lin_clave = '" + linea + "' and prod_clave = '" + txtprod_clave.Text + "'";
-                                reader11 = cmnd11.ExecuteReader();
-                                reader11.Dispose();
-                            }
-                            if (reader1.HasRows == false)
-                            {
-                                cmnd11 = thisConnection.CreateCommand();
-                                cmnd11.CommandText = "select top 1 invmp_inicial_kg, invmp_inicial_un, invmp_entradas_kg, invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un from tb_mstr_inventario_mp where lin_clave ='" + linea + "' and prod_clave ='" + txtprod_clave.Text + "' order BY invmp_fecha desc";
-                                reader11 = cmnd11.ExecuteReader();
-                                while (reader11.Read())
-                                {
-                                    invmp_inicial_kg = reader11.GetSqlDecimal(0).Value;
-                                    invmp_inicial_un = reader11.GetSqlDecimal(1).Value;
-                                    invmp_entradas_kg = reader11.GetSqlDecimal(2).Value;
-                                    invmp_entradas_un = reader11.GetSqlDecimal(3).Value;
-                                    invmp_salidas_kg = reader11.GetSqlDecimal(4).Value;
-                                    invmp_salidas_un = reader11.GetSqlDecimal(5).Value;
-
-                                    var_dec_inv_inicial_kg = invmp_inicial_kg + invmp_entradas_kg - invmp_salidas_kg;
-                                    var_dec_inv_inicial_un = invmp_inicial_un + invmp_entradas_un - invmp_salidas_un;
-
-                                    //inserto un nuevo registro
-                                    cmnd21 = thisConnection.CreateCommand();
-                                    cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_un, invmp_inicial_kg, invmp_entradas_un, invmp_entradas_kg, invmp_salidas_un, invmp_salidas_kg) " +
-                                                       "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea + "', '" + txtprod_clave.Text + "', " + var_dec_inv_inicial_un + ", " + var_dec_inv_inicial_kg + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", " + Convert.ToDecimal(txttotalgrado1.Text) + ", 0, 0)";
-                                    reader21 = cmnd21.ExecuteReader();
-                                    reader21.Dispose();
-                                }
-                                if (reader11.HasRows == false)
-                                {
-                                    cmnd21 = thisConnection.CreateCommand();
-                                    cmnd21.CommandText = "insert into tb_mstr_inventario_mp (invmp_fecha, lin_clave, prod_clave, invmp_inicial_kg, invmp_inicial_un, invmp_entradas_kg, invmp_entradas_un, invmp_salidas_kg, invmp_salidas_un) " +
-                                                        "values ('" + System.DateTime.Now.ToShortDateString() + "', '" + linea.Trim() + "', '" + txtprod_clave.Text + "', 0, 0, " + Convert.ToDecimal(txttotalgrado1.Text) + ", " + Convert.ToDecimal(txtrmpnumenvase.Text) + ", 0, 0)";
-                                    reader21 = cmnd21.ExecuteReader();
-                                    reader21.Dispose();
-                                }
-                                reader11.Dispose();
-                            }
-                            reader1.Dispose();
-                            #endregion
-                        }
-                        reader1.Dispose();
-                        #endregion
-                        thisConnection.Close();
-
                         if (lblEstado.Text == "1")
                             btnGuardaOCA_Click(null, null);
 
@@ -1878,16 +1912,18 @@ namespace Recepcion_MP
                     }
                     catch (SqlException ex)
                     {
+                        if (trx != null) { try { trx.Rollback(); } catch { } }
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex.ToString());
+                        AvisoError("sistemas@mrlucky.com.mx", ex.ToString());
                         Utilerias.Class1.registro_errores(DateTime.Now, Utilerias.Class1.Usu_login, Environment.MachineName, "2.1", ex.ToString().Trim(), "SIPGAB");
                         MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
                     catch (Exception ex1)
                     {
+                        if (trx != null) { try { trx.Rollback(); } catch { } }
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex1.ToString());
+                        AvisoError("sistemas@mrlucky.com.mx", ex1.ToString());
                         MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
@@ -2119,7 +2155,7 @@ namespace Recepcion_MP
                         MyConnection.Close();
                         //Utilerias.Class1.registrar_movimiento(DateTime.Now, Utilerias.Class1.Nombre_equipo, Utilerias.Class1.Usuario, "errorFOX", Utilerias.Class1.Formulario, txtrecibo.Text, ex.ToString());
                         Utilerias.Class1.registro_errores(DateTime.Now, Utilerias.Class1.Usu_login, Environment.MachineName, "2.1", ex.ToString().Trim(), "MPFOX");
-                        Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString().Trim());
+                        AvisoError("jbravo@mrlucky.com.mx", ex.ToString().Trim());
                         MessageBox.Show(ex.ToString(), "ERROR", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }*/
@@ -2520,14 +2556,14 @@ namespace Recepcion_MP
             catch (SqlException ex)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex.ToString());
                 MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             catch (Exception ex1)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                 MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }          
@@ -2595,14 +2631,14 @@ namespace Recepcion_MP
             catch (SqlException ex)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex.ToString());
                 MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             catch (Exception ex1)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                 MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }    
@@ -2629,14 +2665,14 @@ namespace Recepcion_MP
             catch (SqlException ex)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex.ToString());
                 MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             catch (Exception ex1)
             {
                 thisConnection.Close();
-                Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                 MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }    
@@ -2683,14 +2719,14 @@ namespace Recepcion_MP
                     catch (SqlException ex)
                     {
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());
+                        AvisoError("jbravo@mrlucky.com.mx", ex.ToString());
                         MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
                     catch (Exception ex1)
                     {
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                        AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                         MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }    
@@ -3155,14 +3191,14 @@ namespace Recepcion_MP
                     catch (SqlException ex)
                     {
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());
+                        AvisoError("jbravo@mrlucky.com.mx", ex.ToString());
                         MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
                     catch (Exception ex1)
                     {
                         thisConnection.Close();
-                        Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                        AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                         MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }    
@@ -3416,7 +3452,7 @@ namespace Recepcion_MP
                 catch (SqlException ex)
                 {
                     thisConnection.Close();
-                    Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex.ToString());
+                    AvisoError("sistemas@mrlucky.com.mx", ex.ToString());
                     Utilerias.Class1.registro_errores(DateTime.Now, Utilerias.Class1.Usu_login, Environment.MachineName, "2.1", ex.ToString().Trim(), "MPSQL");
                     MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
@@ -3424,7 +3460,7 @@ namespace Recepcion_MP
                 catch (Exception ex1)
                 {
                     thisConnection.Close();
-                    Utilerias.Class1.SendMail("sistemas@mrlucky.com.mx", "sistemas", "Sistem@s2026$", ex1.ToString());
+                    AvisoError("sistemas@mrlucky.com.mx", ex1.ToString());
                     MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }                 
@@ -3569,7 +3605,7 @@ namespace Recepcion_MP
                 catch (SqlException ex)
                 {
                     MyConnection.Close();
-                    Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());
+                    AvisoError("jbravo@mrlucky.com.mx", ex.ToString());
                     Utilerias.Class1.registro_errores(DateTime.Now, Utilerias.Class1.Usu_login, Environment.MachineName, "2.1", ex.ToString().Trim(), "MPFOX");
                     MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
@@ -3577,7 +3613,7 @@ namespace Recepcion_MP
                 catch (Exception ex1)
                 {
                     MyConnection.Close();
-                    Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                    AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                     MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 } */   
@@ -3701,14 +3737,14 @@ namespace Recepcion_MP
                         catch (SqlException ex)
                         {
                             //thisConnection.Close();
-                            Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex.ToString());                            
+                            AvisoError("jbravo@mrlucky.com.mx", ex.ToString());                            
                             MessageBox.Show(ex.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                             return;
                         }
                         catch (Exception ex1)
                         {
                             //thisConnection.Close();
-                            Utilerias.Class1.SendMail("jbravo@mrlucky.com.mx", "jbravo", "juanjose", ex1.ToString());
+                            AvisoError("jbravo@mrlucky.com.mx", ex1.ToString());
                             MessageBox.Show(ex1.ToString(), "AVISO", MessageBoxButtons.OK, MessageBoxIcon.Information);
                             return;
                         }    
@@ -4711,7 +4747,7 @@ namespace Recepcion_MP
 
             if (Convert.ToInt32(conteo) > 0)
             {
-                //Utilerias.Class1.SendMail("aescamilla@mrlucky.com.mx", "aescamilla", "atrejo", "Entra a Verificar Anticipadas " + Utilerias.Class1.Usu_login.ToString() + " " + Environment.MachineName.ToString() + " A.cveprov_oc = '" + txtprov_clave.Text + "' AND B.prod_clave  = '" + txtprod_clave.Text + "'");
+                //AvisoError("aescamilla@mrlucky.com.mx", "Entra a Verificar Anticipadas " + Utilerias.Class1.Usu_login.ToString() + " " + Environment.MachineName.ToString() + " A.cveprov_oc = '" + txtprov_clave.Text + "' AND B.prod_clave  = '" + txtprod_clave.Text + "'");
 
                 string cv = txtrecibo.Text;
                 string pv = txtprov_clave.Text;
