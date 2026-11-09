@@ -1756,11 +1756,11 @@ namespace Recepcion_MP
                         }
                         reader1.Dispose();
                         #endregion
-                        thisConnection.Close();
-
                         // Fin de la transacción de SQL Server. Lo que sigue (réplica a Aguilares, correo, PDF) ya no retiene bloqueos.
+                        // OJO: primero Commit y después Close; cerrar la conexión antes revierte la transacción.
                         trx.Commit();
                         trx = null;
+                        thisConnection.Close();
 
                         #region Guardo el Recibo en la Tabla de Aguilares RCC 19 de Abril 2022
                             string Replica = "N";
